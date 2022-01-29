@@ -11,8 +11,8 @@ from tasks.arithmetics.binary_sum.generator import SumTaskData
 def load_graph(frozen_graph_filename):
     # We load the protobuf file from the disk and parse it to retrieve the
     # unserialized graph_def
-    with tf.gfile.GFile(frozen_graph_filename, 'rb') as f:
-        graph_def = tf.GraphDef()
+    with tf.compat.v2.io.gfile.GFile(frozen_graph_filename, 'rb') as f:
+        graph_def = tf.compat.v1.GraphDef()
         graph_def.ParseFromString(f.read())
 
     # Then, we import the graph_def into a new Graph and returns it
@@ -43,7 +43,7 @@ def prepare_graph_for_inference(directory_path: Path):
 
 def infer_model(directory_path: Path, inputs, seq_len):
     graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(directory_path)
-    with tf.Session(graph=graph) as sess:
+    with tf.compat.v1.Session(graph=graph) as sess:
         outputs = sess.run(y, feed_dict={
             inputs_placeholder: inputs,
             seq_len_placeholder: seq_len

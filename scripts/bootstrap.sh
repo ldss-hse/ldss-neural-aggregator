@@ -8,8 +8,10 @@ set -x
 # sudo apt install git
 # git clone https://github.com/demid5111/NeuralTuringMachine
 # cd NeuralTuringMachine/
+# git submodule update --init --recursive
 # git checkout feature/demidovs/binary-average-accumulator-dataset-generator
-# bash scripts/bootstrap.s
+# git submodule update --init --recursive
+# bash scripts/bootstrap.sh
 
 # Preparing fresh machine for the first usage:
 

@@ -16,7 +16,7 @@ lspci -nn | grep '\[03'
 # run the training
 python run_tasks.py --experiment_name experiment --verbose no \
                       --num_train_steps 1000000 --steps_per_eval 1000 --use_local_impl yes \
-                      --curriculum none --device cpu\
-                      --num_bits_per_vector 3 --num_memory_locations 256\
-                      --max_seq_len 4 --task mta \
+                      --curriculum none --device cpu \
+                      --num_bits_per_vector 3 --num_memory_locations 256 \
+                      --max_seq_len 4 --task mta --mta_encoding full_no_weights \
                       --num_experts 2

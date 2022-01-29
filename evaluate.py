@@ -67,6 +67,7 @@ def eval_performance(sess, data_generator, args, model, target_point, labels, ou
         generator_args['two_tuple_weight_precision'] = args.two_tuple_weight_precision
         generator_args['two_tuple_alpha_precision'] = args.two_tuple_alpha_precision
         generator_args['two_tuple_largest_scale_size'] = args.two_tuple_largest_scale_size
+        generator_args['mta_encoding'] = args.mta_encoding
 
     batches = data_generator.generate_batches(**generator_args)
 
@@ -100,7 +101,8 @@ def eval_performance(sess, data_generator, args, model, target_point, labels, ou
         )
 
         multi_task_loss, multi_task_error = run_eval(sess, model, inputs_placeholder, outputs_placeholder,
-                                                     max_seq_len_placeholder, data_generator, args, target_point, labels,
+                                                     max_seq_len_placeholder, data_generator, args, target_point,
+                                                     labels,
                                                      outputs, inputs, batches)
 
     # curriculum point

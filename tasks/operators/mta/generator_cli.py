@@ -21,6 +21,7 @@ class GeneratorCLIArgumentParser(Tap):
     two_tuple_largest_scale_size: int = 5
     serialized_path: str
     mode: str
+    mta_encoding: str
 
 
 def main(args: GeneratorCLIArgumentParser):
@@ -31,7 +32,8 @@ def main(args: GeneratorCLIArgumentParser):
                                    numbers_quantity=args.numbers_quantity,
                                    two_tuple_weight_precision=args.two_tuple_weight_precision,
                                    two_tuple_alpha_precision=args.two_tuple_alpha_precision,
-                                   two_tuple_largest_scale_size=args.two_tuple_largest_scale_size)
+                                   two_tuple_largest_scale_size=args.two_tuple_largest_scale_size,
+                                   mta_encoding=args.mta_encoding)
 
         path = Path(args.serialized_path)
         try:

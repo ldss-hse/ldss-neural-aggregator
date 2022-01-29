@@ -80,6 +80,14 @@ def create_argparser():
     parser.add_argument('--two_tuple_largest_scale_size', type=int, required=False, default=5,
                         help='Optional. Specifies size of the largest liguistic scale used to encode 2-tuple')
 
+    parser.add_argument('--mta_encoding', choices=(
+        MTATask.MTAEncodingType.full,
+        MTATask.MTAEncodingType.compact,
+        MTATask.MTAEncodingType.full_no_weights),
+                        required=False, default=MTATask.MTAEncodingType.full,
+                        help='Optional. Specifies how dataset is encoded. Full means 2-tuple is fed to network'
+                             'as full TPR. Compact means 2-tuple is fed to network as two fillers: term and projection')
+
     return parser
 
 
@@ -334,11 +342,13 @@ if __name__ == '__main__':
             generator_args['numbers_quantity'] = args.num_experts
 
         if args.task == MTATask.name:
-            generator_args['cli_mode'] = True
+            generator_args['cli_mode'] = args.mta_encoding in (
+            MTATask.MTAEncodingType.full, MTATask.MTAEncodingType.full_no_weights)
             generator_args['numbers_quantity'] = args.num_experts
             generator_args['two_tuple_weight_precision'] = args.two_tuple_weight_precision
             generator_args['two_tuple_alpha_precision'] = args.two_tuple_alpha_precision
             generator_args['two_tuple_largest_scale_size'] = args.two_tuple_largest_scale_size
+            generator_args['mta_encoding'] = args.mta_encoding
 
         seq_len, inputs, labels = data_generator.generate_batches(**generator_args)[0]
 

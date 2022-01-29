@@ -10,6 +10,7 @@ import tensorflow as tf
 
 from constants import ROOT_DIR_PATH, TMP_ARTIFACTS_PATH
 from tasks.operators.mta.cli_utils import run_console_tool
+from tasks.operators.mta.task import MTATask
 from utils import logger
 
 sys.path.insert(0, f'{ROOT_DIR_PATH}/tasks/operators/tpr_toolkit')
@@ -37,7 +38,9 @@ def single_tpr_len(two_tuple_largest_scale_size) -> int:
 
 
 def log_generated_mta_samples(samples: List[np.ndarray], results, bits_per_number, numbers_quantity,
-                              linguistic_scale_size, is_verbose=True, full_check=False, encoder=None, decoder=None):
+                              linguistic_scale_size, is_verbose=True, full_check=False, encoder=None, decoder=None,
+                              mta_encoding=None):
+    assert mta_encoding, 'MTA Encoding type should be known for logging it'
     if full_check:
         to_check = samples
     else:
@@ -50,8 +53,14 @@ def log_generated_mta_samples(samples: List[np.ndarray], results, bits_per_numbe
             tprs.append(sample[number_starts_at:number_finishes_at][:, 0])
         res_tpr = results[sample_index][:, 0]
 
-        model_tuples = [tpr.model_2_tuple.decode_model_2_tuple_tpr(i, decoder=decoder)[0] for i in tprs]
-        res_tuple = tpr.model_2_tuple.decode_model_2_tuple_tpr(res_tpr, decoder=decoder)[0]
+        model_2_tuple_has_weights = mta_encoding == MTATask.MTAEncodingType.full
+        model_tuples = [
+            tpr.model_2_tuple.decode_model_2_tuple_tpr(i,
+                                                       decoder=decoder,
+                                                       model_2_tuple_has_weights=model_2_tuple_has_weights)[0]
+            for i in tprs]
+        res_tuple = tpr.model_2_tuple.decode_model_2_tuple_tpr(res_tpr, decoder=decoder,
+                                                               model_2_tuple_has_weights=model_2_tuple_has_weights)[0]
 
         if is_verbose:
             input_model_tuple_str = ', '.join(map(str, model_tuples))
@@ -63,39 +72,120 @@ def log_generated_mta_samples(samples: List[np.ndarray], results, bits_per_numbe
 def generate_batch(numbers_quantity, batch_size, bits_per_number, bits_per_vector_for_inputs,
                    bits_per_vector_for_outputs, two_tuple_weight_precision,
                    two_tuple_alpha_precision,
-                   two_tuple_largest_scale_size, encoder=None, decoder=None):
-    batch_tuples = []
-    batch_result_tuples = []
+                   two_tuple_largest_scale_size, mta_encoding, encoder=None, decoder=None):
+    raw_dataset = []
+    # structure: [
+    #                  [ [ tuple1, tuple2], tuple_answer ],
+    #                  [ [ tuple1, tuple2], tuple_answer ],
+    # ]
     for batch_index in range(batch_size):
         # 1. generate the tuples
         tuples = []
         for _ in range(numbers_quantity):
             random_index = random.randint(0, two_tuple_largest_scale_size - 1)
             random_alpha = round(random.uniform(-.5, .5), two_tuple_alpha_precision)
-            weight = round(1 / numbers_quantity, two_tuple_weight_precision)
-            first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=random_index,
-                                                        alpha=random_alpha,
-                                                        linguistic_scale_size=two_tuple_largest_scale_size,
-                                                        weight=weight)
+            if mta_encoding in (MTATask.MTAEncodingType.full_no_weights, MTATask.MTAEncodingType.compact):
+                weight = None
+                first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=random_index,
+                                                            alpha=random_alpha,
+                                                            linguistic_scale_size=two_tuple_largest_scale_size,
+                                                            weight=weight)
+            elif mta_encoding == MTATask.MTAEncodingType.full:
+                weight = round(1 / numbers_quantity, two_tuple_weight_precision)
+                first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=random_index,
+                                                            alpha=random_alpha,
+                                                            linguistic_scale_size=two_tuple_largest_scale_size,
+                                                            weight=weight)
+            else:
+                raise NotImplemented(f'Encoding scheme <{mta_encoding}> is not currently supported')
+
             tuples.append(first_tuple)
 
         # 2. aggregate the tuples
         mta_result_tuple = tpr.model_2_tuple.aggregate_model_tuples(tuples, two_tuple_largest_scale_size)
 
+        raw_dataset.append([tuples, mta_result_tuple])
+
+    example_input = new_empty_placeholder(numbers_quantity, batch_size, bits_per_number,
+                                          bits_per_vector_for_inputs)
+    example_output = np.zeros((batch_size, bits_per_number, bits_per_vector_for_outputs))
+
+    if mta_encoding == MTATask.MTAEncodingType.full or mta_encoding == MTATask.MTAEncodingType.full_no_weights:
+        example_input, example_output = pack_with_full_mta_encoding(raw_dataset, numbers_quantity, bits_per_number,
+                                                                    two_tuple_largest_scale_size, example_input,
+                                                                    example_output, encoder, decoder, mta_encoding)
+    elif mta_encoding == MTATask.MTAEncodingType.compact:
+        example_input, example_output = pack_with_compact_mta_encoding(raw_dataset, bits_per_number, example_input,
+                                                                       example_output)
+    else:
+        raise NotImplemented(f'Encoding scheme <{mta_encoding}> is not currently supported')
+
+    return example_input, example_output
+
+
+def encode_compact_model_2_tuple(model_2_tuple):
+    index, alpha, weight = tpr.model_2_tuple.FillerFactory._to_tpr_fillers(model_2_tuple)
+
+    separator_index = len(index)
+    return np.concatenate((index, np.array([0]), alpha)), separator_index
+
+
+def pack_with_compact_mta_encoding(raw_dataset, bits_per_number, example_input, example_output):
+    """"
+    Pack scheme for the single entry:
+    0 0 0 |^^^
+    0 0 0 |-filler of index of tuple #1
+    1 0 0 |vvv
+    0 1 0 |-marker "end of filler"
+    0 0 0 |^^^
+    0 0 0 |-filler of alpha of tuple #1
+    1 0 0 |vvv
+    0 0 1 |-marker "end of tuple"
+    0 0 0 |^^^
+    0 0 0 |-filler of index of tuple #2
+    1 0 0 |vvv
+    0 1 0 |-marker "end of filler"
+    0 0 0 |^^^
+    0 0 0 |-filler of alpha of tuple #2
+    1 0 0 |vvv
+    0 0 1 |-marker "end of tuple"
+    1 1 1 |-marker "end of expression" - added at the end of the pipeline
+    """
+    for sample_index, (tuples, mta_result_tuple) in enumerate(raw_dataset):
+        for tuple_index, tuple_ith in enumerate(tuples):
+            vec, sep_index = encode_compact_model_2_tuple(tuple_ith)
+            assert len(vec) == bits_per_number, 'THEY SHOULD BE EQUAL'
+
+            vec_starts_at = tuple_index * (bits_per_number + 1)
+            vec_finishes_at = vec_starts_at + bits_per_number
+            example_input[sample_index, vec_starts_at:vec_finishes_at, 0] = vec
+            example_input[sample_index, vec_starts_at + sep_index, 1] = 1  # marker "end of filler"
+            example_input[sample_index, vec_finishes_at, 2] = 1  # marker "end of tuple"
+
+        vec, sep_index = encode_compact_model_2_tuple(mta_result_tuple)
+        example_output[sample_index, :, 0] = vec
+        example_output[sample_index, sep_index, 1] = 1
+
+    return example_input, example_output
+
+
+def pack_with_full_mta_encoding(raw_dataset, numbers_quantity, bits_per_number,
+                                two_tuple_largest_scale_size, example_input, example_output, encoder, decoder,
+                                mta_encoding):
+    batch_tuples = []
+    batch_result_tuples = []
+    for tuples, mta_result_tuple in raw_dataset:
         # 3. encode the tuples
         encoded_tuples = [tpr.model_2_tuple.encode_model_2_tuple(i, encoder=encoder)[0] for i in tuples]
         flattened_encoded_tuples = [tpr.flattenize_per_tensor_representation(i) for i in encoded_tuples]
         encoded_mta_result_tuple = tpr.model_2_tuple.encode_model_2_tuple(mta_result_tuple, encoder=encoder)[0]
         flattened_encoded_mta_result_tuple = tpr.flattenize_per_tensor_representation(encoded_mta_result_tuple)
+        print(f'TPR flattened shape is: {flattened_encoded_mta_result_tuple.shape}')
 
         batch_tuples.append(flattened_encoded_tuples)
         batch_result_tuples.append(flattened_encoded_mta_result_tuple)
 
     # 4. pack vectors in the training sample
-    example_input = new_empty_placeholder(numbers_quantity, batch_size, bits_per_number,
-                                          bits_per_vector_for_inputs)
-    example_output = np.zeros((batch_size, bits_per_number, bits_per_vector_for_outputs))
-
     for sample_index, sample in enumerate(batch_tuples):
         for tpr_index, vec in enumerate(sample):
             number_starts_at = tpr_index * (bits_per_number + 1)
@@ -109,21 +199,50 @@ def generate_batch(numbers_quantity, batch_size, bits_per_number, bits_per_vecto
         example_output[sample_index, :, 0] = batch_result_tuples[sample_index]
 
     log_generated_mta_samples(example_input, example_output, bits_per_number, numbers_quantity,
-                              two_tuple_largest_scale_size, is_verbose=True, encoder=encoder, decoder=decoder)
+                              two_tuple_largest_scale_size, is_verbose=True, encoder=encoder, decoder=decoder,
+                              mta_encoding=mta_encoding)
     return example_input, example_output
 
 
 def generate_batches(num_batches, batch_size, bits_per_vector, numbers_quantity,
-                     two_tuple_weight_precision, two_tuple_alpha_precision, two_tuple_largest_scale_size):
-    # 0. obtaining encoder and decoder networks for further re-use
-    first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=0, alpha=0,
-                                                linguistic_scale_size=two_tuple_largest_scale_size)
-    encoded_tuple, encoder = tpr.model_2_tuple.encode_model_2_tuple(first_tuple)
-    flattened_encoded_tuple = tpr.flattenize_per_tensor_representation(encoded_tuple)
-    decoded_tuple, decoder = tpr.model_2_tuple.decode_model_2_tuple_tpr(flattened_encoded_tuple)
+                     two_tuple_weight_precision, two_tuple_alpha_precision, two_tuple_largest_scale_size,
+                     mta_encoding):
+    if mta_encoding == MTATask.MTAEncodingType.full:
+        first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=1, alpha=0.2,
+                                                    linguistic_scale_size=two_tuple_largest_scale_size,
+                                                    weight=.0)
+        # 0. obtaining encoder and decoder networks for further re-use
+        encoded_tuple, encoder = tpr.model_2_tuple.encode_model_2_tuple(first_tuple)
+        flattened_encoded_tuple = tpr.flattenize_per_tensor_representation(encoded_tuple)
+        decoded_tuple, decoder = tpr.model_2_tuple.decode_model_2_tuple_tpr(flattened_encoded_tuple)
 
-    bits_per_number = single_tpr_len(two_tuple_largest_scale_size)
-    print(bits_per_number)
+        bits_per_number = single_tpr_len(two_tuple_largest_scale_size)
+    elif mta_encoding == MTATask.MTAEncodingType.full_no_weights:
+        first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=1, alpha=0.2,
+                                                    linguistic_scale_size=two_tuple_largest_scale_size,
+                                                    weight=None)
+        # 0. obtaining encoder and decoder networks for further re-use
+        encoded_tuple, encoder = tpr.model_2_tuple.encode_model_2_tuple(first_tuple)
+        flattened_encoded_tuple = tpr.flattenize_per_tensor_representation(encoded_tuple)
+        decoded_tuple, decoder = tpr.model_2_tuple.decode_model_2_tuple_tpr(flattened_encoded_tuple,
+                                                                            model_2_tuple_has_weights=False)
+
+        bits_per_number = single_tpr_len(two_tuple_largest_scale_size)
+    elif mta_encoding == MTATask.MTAEncodingType.compact:
+        first_tuple = tpr.model_2_tuple.Model2Tuple(term_index=1, alpha=0.2,
+                                                    linguistic_scale_size=two_tuple_largest_scale_size,
+                                                    weight=.0)
+        # 0. encoder and decoder are not needed in this case
+        encoder = None
+        decoder = None
+
+        index, alpha, weight = tpr.model_2_tuple.FillerFactory._to_tpr_fillers(first_tuple)
+        # meaning that every 2-tuple is encoded by filler or index, then marker, then filler of alpha
+        bits_per_number = len(index) + 1 + len(alpha)
+    else:
+        raise NotImplemented(f'Encoding scheme <{mta_encoding}> is not currently supported')
+
+    # logger.info(f'Bits per number in dataset entry: {bits_per_number}')
 
     batches = []
     for i in range(num_batches):
@@ -141,6 +260,7 @@ def generate_batches(num_batches, batch_size, bits_per_vector, numbers_quantity,
                                          two_tuple_weight_precision,
                                          two_tuple_alpha_precision,
                                          two_tuple_largest_scale_size,
+                                         mta_encoding,
                                          encoder=encoder,
                                          decoder=decoder)
 
@@ -170,7 +290,7 @@ class MTATaskData(BinaryVectorErrorEstimator):
     def generate_batches(self, num_batches, batch_size, bits_per_vector=3, curriculum_point=20, max_seq_len=4,
                          curriculum='uniform', pad_to_max_seq_len=False, numbers_quantity=3,
                          two_tuple_weight_precision=1, two_tuple_alpha_precision=1, two_tuple_largest_scale_size=5,
-                         cli_mode=False):
+                         cli_mode=False, mta_encoding=MTATask.MTAEncodingType.full):
         if curriculum != 'none':
             sys.exit(f'Current "{curriculum}" curriculum is not supported by AverageSumTaskData task')
 
@@ -182,6 +302,7 @@ class MTATaskData(BinaryVectorErrorEstimator):
             'two_tuple_weight_precision': two_tuple_weight_precision,
             'two_tuple_alpha_precision': two_tuple_alpha_precision,
             'two_tuple_largest_scale_size': two_tuple_largest_scale_size,
+            'mta_encoding': mta_encoding,
         }
 
         if cli_mode:

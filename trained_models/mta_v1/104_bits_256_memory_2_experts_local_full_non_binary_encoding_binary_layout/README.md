@@ -5,7 +5,7 @@
 |Training aspect | Description |
 |:--|:--|
 |Date| 2021-05-11|
-|Task| mta (full binary layout)|
+|Task| mta (full binary layout, full non-binary encoding)|
 |Error per sequence (start)| 10.0875 |
 |Loss function value (start)| -1.163021695613861 |
 |Error per sequence| 12.431 |

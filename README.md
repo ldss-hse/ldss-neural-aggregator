@@ -74,3 +74,11 @@ As you can see from the below graphs, the network first writes the sequence to m
 ![Read head locations of NTM with 32 memory locations trained on Copy task](/img/ntm_copy_read_head.png)
 
 Further results on memory initilization comparison and learning curves to come...
+
+
+## Statistical information collection
+
+1. Run:
+   ```bash
+   pygount --format=summary --folders-to-skip env,.git,venv,.idea,tpr_toolkit --suffix py,sh .
+   ```
