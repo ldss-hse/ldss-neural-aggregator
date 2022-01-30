@@ -82,3 +82,11 @@ Further results on memory initilization comparison and learning curves to come..
    ```bash
    pygount --format=summary --folders-to-skip env,.git,venv,.idea,tpr_toolkit --suffix py,sh .
    ```
+   
+## PEP8 style check
+
+1. Run:
+
+   ```bash
+   pylint *.py tasks --ignore-paths=^tasks/operators/tpr_toolkit/.*$
+   ```
