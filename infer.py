@@ -66,7 +66,7 @@ def _generate_data(bits_per_number, num_experts):
         data_generator = SumTaskData()
     else:
         data_generator = AverageSumTaskData()
-        generator_args['numbers_quantity'] = args.num_experts
+        generator_args['numbers_quantity'] = num_experts
 
     return data_generator.generate_batches(**generator_args)[0], data_generator
 
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_experts', required=False, type=int,
                         help='Optional. Needed for average sum task and stands for the quantity of numbers to be used'
                              'for calculations')
-    parser.add_argument('--bits_per_number', required=True, default=10, type=int,
+    parser.add_argument('--bits_per_number', required=True, type=int,
                         help='Defines how many bits is allocated for the number representation')
 
     args = parser.parse_args()
