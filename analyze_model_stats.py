@@ -92,7 +92,7 @@ FROZEN_MODEL_MAPPING = {
 
 def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: int, scale_size: int,
             encoding: EncodingType,
-            bits_per_number: int = None):
+            bits_per_number: int = None, is_gpu: bool = False):
     graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
 
     # this report does not work probably as we did not use during training phase
@@ -115,15 +115,21 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
             (seq_len, inputs, labels), data_generator = generate_tpr_data(str(mta_encoding), num_experts, scale_size)
         else:
             (seq_len, inputs, labels), data_generator = generate_binary_data(bits_per_number, num_experts)
-        with tf.compat.v1.Session(graph=graph) as sess:
-            _ = sess.run(y,
-                         feed_dict={
-                             inputs_placeholder: inputs,
-                             seq_len_placeholder: seq_len
-                         },
-                         options=tf.compat.v1.RunOptions(trace_level=tf.compat.v1.RunOptions.FULL_TRACE),
-                         run_metadata=run_metadata
-                         )
+
+        if is_gpu:
+            device_name = "/gpu:0"
+        else:
+            device_name = "/cpu:0"
+        with tf.device(device_name):
+            with tf.compat.v1.Session(graph=graph) as sess:
+                _ = sess.run(y,
+                             feed_dict={
+                                 inputs_placeholder: inputs,
+                                 seq_len_placeholder: seq_len
+                             },
+                             options=tf.compat.v1.RunOptions(trace_level=tf.compat.v1.RunOptions.FULL_TRACE),
+                             run_metadata=run_metadata
+                             )
 
     opts = tf.compat.v1.profiler.ProfileOptionBuilder.time_and_memory()
     time_memory = tf.compat.v1.profiler.profile(graph, options=opts, cmd='op', run_meta=run_metadata)
@@ -165,7 +171,8 @@ def main():
                       mta_encoding=model_info.get('mta_encoding'),
                       num_experts=model_info.get('num_experts'),
                       scale_size=model_info.get('scale_size'),
-                      bits_per_number=model_info.get('bits_per_number'))
+                      bits_per_number=model_info.get('bits_per_number'),
+                      is_gpu=True)
         res['name'] = model_id
         all_rows.append(res)
 
