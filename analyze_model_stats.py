@@ -118,12 +118,14 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
         if is_gpu:
             device_name = "/gpu:0"
         else:
-            device_name = "/gpu:0"
-        with tf.device(device_name):
+            device_name = "/uyfiytcxiyxtpu:0"
+        device_name = "/gpu:0"
+        with tf.compat.v1.device(device_name):
             graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
             with tf.compat.v1.Session(graph=graph,
                                       config=tf.compat.v1.ConfigProto(allow_soft_placement=False,
-                                                                      log_device_placement=False)) as sess:
+                                                                      log_device_placement=False,
+                                                                      device_count = {'CPU': 0})) as sess:
                 _ = sess.run(y,
                              feed_dict={
                                  inputs_placeholder: inputs,
