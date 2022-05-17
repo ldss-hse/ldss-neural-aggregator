@@ -93,7 +93,6 @@ FROZEN_MODEL_MAPPING = {
 def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: int, scale_size: int,
             encoding: EncodingType,
             bits_per_number: int = None, is_gpu: bool = False):
-    graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
 
     # this report does not work probably as we did not use during training phase
     # opts = tf.compat.v1.profiler.ProfileOptionBuilder.trainable_variables_parameter()
@@ -107,7 +106,7 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
     # print('Theoretical FLOPs = ', flops.total_float_ops)
 
     run_metadata = None
-    melting_rounds = 3
+    melting_rounds = 1
     for i in range(melting_rounds):
         print(f'\t [{i + 1}/{melting_rounds}] Inference started...')
         run_metadata = tf.compat.v1.RunMetadata()
@@ -119,9 +118,12 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
         if is_gpu:
             device_name = "/gpu:0"
         else:
-            device_name = "/cpu:0"
+            device_name = "/gpu:0"
         with tf.device(device_name):
-            with tf.compat.v1.Session(graph=graph) as sess:
+            graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
+            with tf.compat.v1.Session(graph=graph,
+                                      config=tf.compat.v1.ConfigProto(allow_soft_placement=False,
+                                                                      log_device_placement=False)) as sess:
                 _ = sess.run(y,
                              feed_dict={
                                  inputs_placeholder: inputs,
@@ -130,6 +132,13 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
                              options=tf.compat.v1.RunOptions(trace_level=tf.compat.v1.RunOptions.FULL_TRACE),
                              run_metadata=run_metadata
                              )
+    for device in run_metadata.step_stats.dev_stats:
+        device_name = device.device
+        # if not (device_name.lower().endswith("cpu:0") or device_name.lower().endswith("gpu:0")):
+        #     continue
+        print(f'Device: {device.device} Ops count: {len(device.node_stats)}')
+        # for node in device.node_stats:
+        #     print("!!!   ", node.node_name)
 
     opts = tf.compat.v1.profiler.ProfileOptionBuilder.time_and_memory()
     time_memory = tf.compat.v1.profiler.profile(graph, options=opts, cmd='op', run_meta=run_metadata)
@@ -175,6 +184,7 @@ def main():
                       is_gpu=True)
         res['name'] = model_id
         all_rows.append(res)
+        break
 
     report_path = Path(__file__).parent / 'artifacts' / 'report.tsv'
     prepare_report(all_rows, report_path)
