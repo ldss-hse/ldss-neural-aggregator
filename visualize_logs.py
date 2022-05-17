@@ -142,16 +142,16 @@ def create_chart(ticks, granularity=1000, type='error', bits_per_number=4, serie
     return plt
 
 
-def save_chart(plot, type, bits_per_number, file_name=None, file_format='svg'):
+def save_chart(plot, type, bits_per_number, file_name=None, file_format='svg', language='ru'):
     try:
         TMP_ARTIFACTS_PATH.mkdir()
     except FileExistsError:
         pass
 
     if file_name is None:
-        path_template = TMP_ARTIFACTS_PATH / f'{bits_per_number}_bit_{type}.{file_format}'
+        path_template = TMP_ARTIFACTS_PATH / f'{bits_per_number}_bit_{type}_{language}.{file_format}'
     else:
-        path_template = TMP_ARTIFACTS_PATH / f'{file_name}.{file_format}'
+        path_template = TMP_ARTIFACTS_PATH / f'{file_name}_{language}.{file_format}'
 
     plot.savefig(path_template, format=file_format, dpi=600)
 
@@ -324,12 +324,11 @@ def main_mta_2_tuple_2_experts_v2_all(args):
     mem_256_17_bit_steps, mem_256_17_bit_errors, mem_256_17_bit_losses = get_history(
         './trained_models/mta_v1/17_bits_256_memory_2_experts_local_compact_binary_encoding_binary_layout/out_213000.log')
 
-    lang = 'ru'
     labels = {
-        '48 bits, 256 memory': get_i8n_name(name='48 bits, 256 memory', name_type='encoding', lang=lang),
-        '17 bits, 256 memory': get_i8n_name(name='17 bits, 256 memory', name_type='encoding', lang=lang),
+        '48 bits, 256 memory': get_i8n_name(name='48 bits, 256 memory', name_type='encoding', lang=args.language),
+        '17 bits, 256 memory': get_i8n_name(name='17 bits, 256 memory', name_type='encoding', lang=args.language),
     }
-    config = dict(lang=lang, labels=labels)
+    config = dict(lang=args.language, labels=labels)
 
     series_dict = {
         '48 bits, 256 memory': mem_256_48_bit_errors,
@@ -343,7 +342,8 @@ def main_mta_2_tuple_2_experts_v2_all(args):
     max_steps = all_steps[max(enumerate(all_steps), key=lambda x: len(x[1]))[0]]
     plot = create_chart(series=series_dict, ticks=max_steps, granularity=args.granularity, type='error',
                         bits_per_number=args.bits_per_number, config=config)
-    save_chart(plot, type='error', bits_per_number=args.bits_per_number, file_name='fig_6_a_error', file_format='pdf')
+    save_chart(plot, type='error', bits_per_number=args.bits_per_number, file_name='fig_6_a_error',
+               file_format='pdf', language=args.language)
 
     series_dict = {
         '48 bits, 256 memory': mem_256_48_bit_losses,
@@ -354,7 +354,8 @@ def main_mta_2_tuple_2_experts_v2_all(args):
         series_dict[key].extend([np.nan for _ in range(max_len - len(series_dict[key]))])
     plot = create_chart(series=series_dict, ticks=max_steps, granularity=args.granularity, type='loss',
                         bits_per_number=args.bits_per_number, config=config)
-    save_chart(plot, type='loss', bits_per_number=args.bits_per_number, file_name='fig_6_b_loss', file_format='pdf')
+    save_chart(plot, type='loss', bits_per_number=args.bits_per_number, file_name='fig_6_b_loss',
+               file_format='pdf', language=args.language)
 
 
 if __name__ == '__main__':
@@ -364,6 +365,8 @@ if __name__ == '__main__':
     parser.add_argument('--granularity', required=False, type=int, default=5000,
                         help='Granularity for ticks')
     parser.add_argument('--bits_per_number', required=True, type=int,
+                        help='Bits per number')
+    parser.add_argument('--language', required=False, choices=('ru', 'en'), default='ru',
                         help='Bits per number')
     args = parser.parse_args()
     if args.log_path == 'mta_all':
