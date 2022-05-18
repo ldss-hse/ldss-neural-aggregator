@@ -1,7 +1,7 @@
 # Neural Turing Machine For Linguistic Decision-Making
 
 This project is a part of the new direction in Decision Support Systems' evolution which is 
-Neuro-Symbolic paradigm. Do read more about Neuro-Symbolic AI, refer to the notable 
+Neuro-Symbolic paradigm. To read more about Neuro-Symbolic AI, refer to the notable 
 [paper](https://arxiv.org/abs/2012.05876)
 by Artur d'Avila Garcez and Luis C. Lamb.
 
