@@ -129,9 +129,11 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
             graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path,
                                                                                               graph_file_name='frozen_graph_no_device.pb',
                                                                                               prefix='prefix')
+            config = tf.compat.v1.ConfigProto(allow_soft_placement=False,
+                                              log_device_placement=False)
+            config.gpu_options.allow_growth = True
             with tf.compat.v1.Session(graph=graph,
-                                      config=tf.compat.v1.ConfigProto(allow_soft_placement=False,
-                                                                      log_device_placement=False)) as sess:
+                                      config=config) as sess:
                 _ = sess.run(y,
                              feed_dict={
                                  inputs_placeholder: inputs,
