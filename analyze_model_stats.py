@@ -3,10 +3,32 @@ from pathlib import Path
 
 import pandas as pd
 import tensorflow as tf
+from tap import Tap
 
 from infer import prepare_graph_for_inference
 from infer_mta import _generate_data as generate_tpr_data
 from infer import _generate_data as generate_binary_data
+
+
+class AnalyzerCLIArgumentParser(Tap):
+    device: str
+
+
+class DeviceType(str, enum.Enum):
+    CPU = '/cpu:0'
+    GPU = '/gpu:0'
+    TPU = '/tpu:0'
+
+    def __str__(self):
+        return self.value
+
+    @classmethod
+    def from_str(cls, device):
+        if 'cpu' in device:
+            return DeviceType.CPU
+        if 'gpu' in device:
+            return DeviceType.GPU
+        return DeviceType.TPU
 
 
 class EncodingType(str, enum.Enum):
@@ -24,13 +46,6 @@ class TPREncodingStrategy(str, enum.Enum):
 
 
 FROZEN_MODEL_MAPPING = {
-    'TPR FAKE (17 bits, 2 experts)': {
-        'encoding': EncodingType.TPR,
-        'num_experts': 2,
-        'scale_size': 5,
-        'mta_encoding': TPREncodingStrategy.COMPACT,
-        'model_dir_name': '.'
-    },
     'TPR (17 bits, 2 experts)': {
         'encoding': EncodingType.TPR,
         'num_experts': 2,
@@ -99,36 +114,21 @@ FROZEN_MODEL_MAPPING = {
 
 def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: int, scale_size: int,
             encoding: EncodingType,
-            bits_per_number: int = None, is_gpu: bool = False):
-
-    # this report does not work probably as we did not use during training phase
-    # opts = tf.compat.v1.profiler.ProfileOptionBuilder.trainable_variables_parameter()
-    # trainable_params = tf.compat.v1.profiler.profile(graph, options=opts, cmd='op')
-    # print('Trainable parameters = ', trainable_params.total_parameters)
-
-    # this report does not work as it has several shapes undefined
-    # how to reshape the graph - open question
-    # opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
-    # flops = tf.compat.v1.profiler.profile(graph, options=opts, cmd='op')
-    # print('Theoretical FLOPs = ', flops.total_float_ops)
-
+            bits_per_number: int = None, device_type: DeviceType = DeviceType.CPU):
     run_metadata = None
     melting_rounds = 1
     for i in range(melting_rounds):
-        print(f'\t [{i + 1}/{melting_rounds}] Inference started...')
+        print(f'\t [{i + 1}/{melting_rounds}] Inference on {device_type} started...')
         run_metadata = tf.compat.v1.RunMetadata()
         if encoding is EncodingType.TPR:
             (seq_len, inputs, labels), data_generator = generate_tpr_data(str(mta_encoding), num_experts, scale_size)
         else:
             (seq_len, inputs, labels), data_generator = generate_binary_data(bits_per_number, num_experts)
 
-        if is_gpu:
-            device_name = "/gpu:0"
-        else:
-            device_name = "/uyfiytcxiyxtpu:0"
-        device_name = "/gpu:0"
-        with tf.compat.v1.device(device_name):
-            graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path, prefix='prefix')
+        with tf.compat.v1.device(str(device_type)):
+            graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path,
+                                                                                              graph_file_name='frozen_graph_no_device.pb',
+                                                                                              prefix='prefix')
             with tf.compat.v1.Session(graph=graph,
                                       config=tf.compat.v1.ConfigProto(allow_soft_placement=False,
                                                                       log_device_placement=False)) as sess:
@@ -141,12 +141,7 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
                              run_metadata=run_metadata
                              )
     for device in run_metadata.step_stats.dev_stats:
-        device_name = device.device
-        # if not (device_name.lower().endswith("cpu:0") or device_name.lower().endswith("gpu:0")):
-        #     continue
-        print(f'!!!Device: {device.device} Ops count: {len(device.node_stats)}')
-        # for node in device.node_stats:
-        #     print("!!!   ", node.node_name)
+        print(f'Device: {device.device} Ops count: {len(device.node_stats)}')
 
     opts = tf.compat.v1.profiler.ProfileOptionBuilder.time_and_memory()
     time_memory = tf.compat.v1.profiler.profile(graph, options=opts, cmd='op', run_meta=run_metadata)
@@ -160,48 +155,41 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
         'GFLOPs': time_memory.total_float_ops / (1000 ** 3),  # as we want to have it as multiplier of 1 * 10^9
     }
 
-def inspect_graph(frozen_path: Path):
-    graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
+
+def remove_device_from_graph(frozen_path: Path, source_name: str, final_name: str):
+    graph, _, y = prepare_graph_for_inference(frozen_path, graph_file_name=source_name)
     with graph.as_default():
-
-        # getting tensors to add crop and resize step
-        ops = graph.get_operations()
-        ops1_name = []
-        for op in ops:
-            # print(op.name)
-            ops1_name.append(op.name)
-            # op.device = None
-        # graph.get_operations()[0].device = None
-        # print(ops)
-
         graph_def = graph.as_graph_def()
         for node in graph_def.node:
             node.device = ""
-        tf.compat.v1.train.write_graph(graph_def, '.', "frozen_graph.pb", False)
 
+        tf.compat.v1.train.write_graph(graph_def, str(frozen_path), final_name, False)
 
 
 def prepare_report(all_rows: list, report_path: Path):
     print('Preparing report...')
     df = pd.DataFrame(all_rows)
     cols = df.columns.tolist()
-    cols = cols[-1:] + cols[:-1]
+    cols = cols[-2:] + cols[:-2]
     df = df[cols]
 
     df.to_csv(report_path, sep='\t')
 
-    pd.set_option('display.max_columns', None)
-    print(df)
 
-
-def main():
+def main(args: AnalyzerCLIArgumentParser):
     all_rows = []
     models_count = len(FROZEN_MODEL_MAPPING)
+    device_type = DeviceType.from_str(args.device)
     for model_idx, (model_id, model_info) in enumerate(FROZEN_MODEL_MAPPING.items()):
         print(f'[{model_idx + 1}/{models_count}] Running inference for <{model_id}>...')
-        model_dir_name = model_info['model_dir_name']
 
-        frozen_dir_path = Path(__file__).parent # / 'trained_models' / model_dir_name
+        model_dir_name = model_info['model_dir_name']
+        frozen_dir_path = Path(__file__).parent / 'trained_models' / model_dir_name
+
+        no_device_name = 'frozen_graph_no_device.pb'
+        if not (frozen_dir_path / no_device_name).exists():
+            original_name = 'frozen_graph.pb'
+            remove_device_from_graph(frozen_dir_path, original_name, no_device_name)
 
         res = analyze(frozen_path=frozen_dir_path,
                       encoding=model_info['encoding'],
@@ -209,10 +197,10 @@ def main():
                       num_experts=model_info.get('num_experts'),
                       scale_size=model_info.get('scale_size'),
                       bits_per_number=model_info.get('bits_per_number'),
-                      is_gpu=True)
+                      device_type=device_type)
         res['name'] = model_id
+        res['device_type'] = str(device_type)
         all_rows.append(res)
-        break
 
     report_path = Path(__file__).parent / 'artifacts' / 'report.tsv'
     prepare_report(all_rows, report_path)
@@ -222,7 +210,6 @@ if __name__ == '__main__':
     tf.compat.v1.enable_v2_behavior()
     tf.compat.v1.disable_eager_execution()
 
-    main()
-    path = Path(r'C:\Users\demidovs\projects\NeuralTuringMachine\trained_models\mta_v1\17_bits_256_memory_2_experts_local_compact_binary_encoding_binary_layout')
-    path = Path(r'C:\Users\demidovs\projects\NeuralTuringMachine')
-    # inspect_graph(path)
+    args = AnalyzerCLIArgumentParser().parse_args()
+
+    main(args)

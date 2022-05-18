@@ -23,8 +23,8 @@ def load_graph(frozen_graph_filename):
     return graph
 
 
-def prepare_graph_for_inference(directory_path: Path, prefix: str = ''):
-    graph = load_graph(str(directory_path / 'frozen_graph.pb'))
+def prepare_graph_for_inference(directory_path: Path, graph_file_name:str='frozen_graph.pb', prefix: str = ''):
+    graph = load_graph(str(directory_path / graph_file_name))
 
     additional_prefix = f'{prefix}/' if prefix else ''
     max_seq_len_placeholder_name = f'{additional_prefix}prefix/root/Placeholder:0'
