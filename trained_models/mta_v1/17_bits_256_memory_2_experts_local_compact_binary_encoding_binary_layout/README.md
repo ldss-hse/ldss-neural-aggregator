@@ -25,7 +25,11 @@ python run_tasks.py --experiment_name experiment --verbose no \
 
 ## Inference command
 
-**N/A**
+```bash
+python infer_mta.py --frozen_model_filename .\trained_models\mta_v1\17_bits_256_memory_2_experts_local_compact_binary_encoding_binary_layout\frozen_graph.pb \
+                    --mta_encoding compact \
+                    --num_experts 2
+```
 
 ## Logs
 

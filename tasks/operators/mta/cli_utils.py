@@ -1,3 +1,4 @@
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -6,7 +7,10 @@ from constants import ROOT_DIR_PATH
 
 
 def run_console_tool(tool_path: Path, *args, **kwargs):
-    python_executable = ROOT_DIR_PATH / 'venv' / 'bin' / 'python'
+    if platform.system() == 'Windows':
+        python_executable = ROOT_DIR_PATH / 'venv' / 'Scripts' / 'python.exe'
+    else:
+        python_executable = ROOT_DIR_PATH / 'venv' / 'bin' / 'python'
 
     kwargs_processed = []
     for item in kwargs.items():

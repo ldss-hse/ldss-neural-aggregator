@@ -5,7 +5,7 @@ set -x
 #
 # ssh root@188.166.169.120
 # sudo apt-get update
-# sudo apt install git
+# sudo apt install --yes git
 # git clone https://github.com/demid5111/NeuralTuringMachine
 # cd NeuralTuringMachine/
 # git submodule update --init --recursive

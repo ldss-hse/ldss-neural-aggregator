@@ -240,7 +240,7 @@ def generate_batches(num_batches, batch_size, bits_per_vector, numbers_quantity,
         # meaning that every 2-tuple is encoded by filler or index, then marker, then filler of alpha
         bits_per_number = len(index) + 1 + len(alpha)
     else:
-        raise NotImplemented(f'Encoding scheme <{mta_encoding}> is not currently supported')
+        raise ValueError(f'Encoding scheme <{mta_encoding}> is not currently supported')
 
     # logger.info(f'Bits per number in dataset entry: {bits_per_number}')
 

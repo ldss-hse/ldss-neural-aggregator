@@ -23,12 +23,13 @@ def load_graph(frozen_graph_filename):
     return graph
 
 
-def prepare_graph_for_inference(directory_path: Path):
-    graph = load_graph(str(directory_path / 'frozen_graph.pb'))
+def prepare_graph_for_inference(directory_path: Path, graph_file_name:str='frozen_graph.pb', prefix: str = ''):
+    graph = load_graph(str(directory_path / graph_file_name))
 
-    max_seq_len_placeholder_name = 'prefix/root/Placeholder:0'
-    inputs_placeholder_name = 'prefix/root/Placeholder_1:0'
-    output_name = 'prefix/root/Sigmoid:0'
+    additional_prefix = f'{prefix}/' if prefix else ''
+    max_seq_len_placeholder_name = f'{additional_prefix}prefix/root/Placeholder:0'
+    inputs_placeholder_name = f'{additional_prefix}prefix/root/Placeholder_1:0'
+    output_name = f'{additional_prefix}prefix/root/Sigmoid:0'
 
     inputs_placeholder = graph.get_tensor_by_name(inputs_placeholder_name)
     max_seq_len_placeholder = graph.get_tensor_by_name(max_seq_len_placeholder_name)
@@ -66,7 +67,7 @@ def _generate_data(bits_per_number, num_experts):
         data_generator = SumTaskData()
     else:
         data_generator = AverageSumTaskData()
-        generator_args['numbers_quantity'] = args.num_experts
+        generator_args['numbers_quantity'] = num_experts
 
     return data_generator.generate_batches(**generator_args)[0], data_generator
 
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_experts', required=False, type=int,
                         help='Optional. Needed for average sum task and stands for the quantity of numbers to be used'
                              'for calculations')
-    parser.add_argument('--bits_per_number', required=True, default=10, type=int,
+    parser.add_argument('--bits_per_number', required=True, type=int,
                         help='Defines how many bits is allocated for the number representation')
 
     args = parser.parse_args()

@@ -11,7 +11,7 @@ from tasks.operators.mta.task import MTATask
 from tasks.operators.tpr_toolkit.core.model_2_tuple import Model2Tuple, aggregate_model_tuples, FillerFactory
 
 
-def _generate_data(mta_encoding, num_experts):
+def _generate_data(mta_encoding, num_experts, scale_size):
     generator_args = dict(
         num_batches=1,
         batch_size=32,
@@ -27,7 +27,7 @@ def _generate_data(mta_encoding, num_experts):
     generator_args['numbers_quantity'] = num_experts
     generator_args['two_tuple_weight_precision'] = 1
     generator_args['two_tuple_alpha_precision'] = 1
-    generator_args['two_tuple_largest_scale_size'] = LINGUISTIC_SCALE_SIZE
+    generator_args['two_tuple_largest_scale_size'] = scale_size
     generator_args['mta_encoding'] = mta_encoding
 
     data_generator = MTATaskData()
@@ -35,8 +35,8 @@ def _generate_data(mta_encoding, num_experts):
     return data_generator.generate_batches(**generator_args)[0], data_generator
 
 
-def test_model(directory_path: Path, mta_encoding, num_experts):
-    (seq_len, inputs, labels), data_generator = _generate_data(mta_encoding, num_experts)
+def test_model(directory_path: Path, mta_encoding, num_experts, scale_size):
+    (seq_len, inputs, labels), data_generator = _generate_data(mta_encoding, num_experts, scale_size)
 
     outputs = infer_model(directory_path, inputs=inputs, seq_len=seq_len)
 
@@ -45,19 +45,16 @@ def test_model(directory_path: Path, mta_encoding, num_experts):
     return error
 
 
-def demo_summator(directory_path: Path, numbers, mta_encoding, num_experts):
-    (seq_len, inputs, labels), data_generator = _generate_data(mta_encoding, num_experts)
+def demo_summator(directory_path: Path, numbers, mta_encoding, num_experts, scale_size):
+    (seq_len, inputs, labels), data_generator = _generate_data(mta_encoding, num_experts, scale_size)
 
     bits_per_vector = 3
-    bits_per_vector_for_inputs = bits_per_vector + 1
     bits_per_vector_for_outputs = bits_per_vector
 
-    example_input = new_empty_placeholder(num_experts, 1, seq_len,
-                                          bits_per_vector_for_inputs)
     example_output = np.zeros((1, seq_len, bits_per_vector_for_outputs))
 
     raw_dataset = [
-        [numbers, aggregate_model_tuples(numbers, LINGUISTIC_SCALE_SIZE)]
+        [numbers, aggregate_model_tuples(numbers, scale_size)]
     ]
 
     example_input, _ = pack_with_compact_mta_encoding(raw_dataset, seq_len, inputs, example_output)
@@ -68,7 +65,7 @@ def demo_summator(directory_path: Path, numbers, mta_encoding, num_experts):
 
     predicted_raw = outputs[0][:, 0]
     term_filler = predicted_raw[:separator_index]
-    alpha_filler = predicted_raw[separator_index+1:]
+    alpha_filler = predicted_raw[separator_index + 1:]
 
     term_index, alpha, _ = FillerFactory.decode_fillers(term_filler, alpha_filler, None)
     result = Model2Tuple(term_index=term_index, alpha=alpha, linguistic_scale_size=5, weight=None)
@@ -96,7 +93,8 @@ if __name__ == '__main__':
 
     model = Path(args.frozen_model_filename)
 
-    overall_err = test_model(model.parent, mta_encoding=args.mta_encoding, num_experts=args.num_experts)
+    overall_err = test_model(model.parent, mta_encoding=args.mta_encoding, num_experts=args.num_experts,
+                             scale_size=LINGUISTIC_SCALE_SIZE)
     print(f'Overall quality of model. Error: {overall_err}')
 
     tuples = []
@@ -107,7 +105,7 @@ if __name__ == '__main__':
         sys.exit(f'Provide {args.num_experts} examples of 2-tuples to test the model')
 
     demo_result = demo_summator(model.parent, numbers=tuples, mta_encoding=args.mta_encoding,
-                                num_experts=args.num_experts)
+                                num_experts=args.num_experts, scale_size=LINGUISTIC_SCALE_SIZE)
     summands_str = ', '.join([str(i) for i in tuples])
 
     expected_res = Model2Tuple(term_index=3, alpha=-0.4, linguistic_scale_size=5, weight=None)
