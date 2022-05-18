@@ -12,6 +12,7 @@ from infer import _generate_data as generate_binary_data
 
 class AnalyzerCLIArgumentParser(Tap):
     device: str
+    melting_rounds: int = 10
 
 
 class DeviceType(str, enum.Enum):
@@ -114,9 +115,9 @@ FROZEN_MODEL_MAPPING = {
 
 def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: int, scale_size: int,
             encoding: EncodingType,
+            melting_rounds: int,
             bits_per_number: int = None, device_type: DeviceType = DeviceType.CPU):
     run_metadata = None
-    melting_rounds = 1
     for i in range(melting_rounds):
         print(f'\t [{i + 1}/{melting_rounds}] Inference on {device_type} started...')
         run_metadata = tf.compat.v1.RunMetadata()
@@ -199,6 +200,7 @@ def main(args: AnalyzerCLIArgumentParser):
                       num_experts=model_info.get('num_experts'),
                       scale_size=model_info.get('scale_size'),
                       bits_per_number=model_info.get('bits_per_number'),
+                      melting_rounds=args.melting_rounds,
                       device_type=device_type)
         res['name'] = model_id
         res['device_type'] = str(device_type)
