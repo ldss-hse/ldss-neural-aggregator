@@ -53,7 +53,7 @@ To cite Neuro-Symbolic DSS advances produced by this project, you can cite the p
    pygount --format=summary --folders-to-skip env,.git,venv,.idea,tpr_toolkit --suffix py,sh .
    ```
    
-## PEP8 style check
+#### PEP8 style check
 
 1. Run:
 
