@@ -24,6 +24,13 @@ class TPREncodingStrategy(str, enum.Enum):
 
 
 FROZEN_MODEL_MAPPING = {
+    'TPR FAKE (17 bits, 2 experts)': {
+        'encoding': EncodingType.TPR,
+        'num_experts': 2,
+        'scale_size': 5,
+        'mta_encoding': TPREncodingStrategy.COMPACT,
+        'model_dir_name': '.'
+    },
     'TPR (17 bits, 2 experts)': {
         'encoding': EncodingType.TPR,
         'num_experts': 2,
@@ -121,11 +128,10 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
             device_name = "/uyfiytcxiyxtpu:0"
         device_name = "/gpu:0"
         with tf.compat.v1.device(device_name):
-            graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
+            graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path, prefix='prefix')
             with tf.compat.v1.Session(graph=graph,
                                       config=tf.compat.v1.ConfigProto(allow_soft_placement=False,
-                                                                      log_device_placement=False,
-                                                                      device_count = {'CPU': 0})) as sess:
+                                                                      log_device_placement=False)) as sess:
                 _ = sess.run(y,
                              feed_dict={
                                  inputs_placeholder: inputs,
@@ -138,7 +144,7 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
         device_name = device.device
         # if not (device_name.lower().endswith("cpu:0") or device_name.lower().endswith("gpu:0")):
         #     continue
-        print(f'Device: {device.device} Ops count: {len(device.node_stats)}')
+        print(f'!!!Device: {device.device} Ops count: {len(device.node_stats)}')
         # for node in device.node_stats:
         #     print("!!!   ", node.node_name)
 
@@ -153,6 +159,26 @@ def analyze(frozen_path: Path, mta_encoding: TPREncodingStrategy, num_experts: i
         'Output bytes (MB)': time_memory.total_output_bytes / (batch_size * 1000 ** 2),  # as it is in bytes
         'GFLOPs': time_memory.total_float_ops / (1000 ** 3),  # as we want to have it as multiplier of 1 * 10^9
     }
+
+def inspect_graph(frozen_path: Path):
+    graph, (inputs_placeholder, seq_len_placeholder), y = prepare_graph_for_inference(frozen_path)
+    with graph.as_default():
+
+        # getting tensors to add crop and resize step
+        ops = graph.get_operations()
+        ops1_name = []
+        for op in ops:
+            # print(op.name)
+            ops1_name.append(op.name)
+            # op.device = None
+        # graph.get_operations()[0].device = None
+        # print(ops)
+
+        graph_def = graph.as_graph_def()
+        for node in graph_def.node:
+            node.device = ""
+        tf.compat.v1.train.write_graph(graph_def, '.', "frozen_graph.pb", False)
+
 
 
 def prepare_report(all_rows: list, report_path: Path):
@@ -175,7 +201,7 @@ def main():
         print(f'[{model_idx + 1}/{models_count}] Running inference for <{model_id}>...')
         model_dir_name = model_info['model_dir_name']
 
-        frozen_dir_path = Path(__file__).parent / 'trained_models' / model_dir_name
+        frozen_dir_path = Path(__file__).parent # / 'trained_models' / model_dir_name
 
         res = analyze(frozen_path=frozen_dir_path,
                       encoding=model_info['encoding'],
@@ -197,3 +223,6 @@ if __name__ == '__main__':
     tf.compat.v1.disable_eager_execution()
 
     main()
+    path = Path(r'C:\Users\demidovs\projects\NeuralTuringMachine\trained_models\mta_v1\17_bits_256_memory_2_experts_local_compact_binary_encoding_binary_layout')
+    path = Path(r'C:\Users\demidovs\projects\NeuralTuringMachine')
+    # inspect_graph(path)

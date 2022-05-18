@@ -23,12 +23,13 @@ def load_graph(frozen_graph_filename):
     return graph
 
 
-def prepare_graph_for_inference(directory_path: Path):
+def prepare_graph_for_inference(directory_path: Path, prefix: str = ''):
     graph = load_graph(str(directory_path / 'frozen_graph.pb'))
 
-    max_seq_len_placeholder_name = 'prefix/root/Placeholder:0'
-    inputs_placeholder_name = 'prefix/root/Placeholder_1:0'
-    output_name = 'prefix/root/Sigmoid:0'
+    additional_prefix = f'{prefix}/' if prefix else ''
+    max_seq_len_placeholder_name = f'{additional_prefix}prefix/root/Placeholder:0'
+    inputs_placeholder_name = f'{additional_prefix}prefix/root/Placeholder_1:0'
+    output_name = f'{additional_prefix}prefix/root/Sigmoid:0'
 
     inputs_placeholder = graph.get_tensor_by_name(inputs_placeholder_name)
     max_seq_len_placeholder = graph.get_tensor_by_name(max_seq_len_placeholder_name)
