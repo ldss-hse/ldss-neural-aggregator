@@ -1,11 +1,11 @@
-name	gflops_CPU	output_bytes_CPU	output_bytes_GPU	requested_bytes_CPU	requested_bytes_GPU	total_time_CPU	total_time_GPU	ncs2_W
-TPR (17 bits, 2 experts)	0.53	99.22	110.91	62.57	68.44	805.39	833.82	0.0005
-TPR (48 bits, 2 experts)	1.47	273.12	308.46	172.1	189.61	2819.78	2413.16	0.0015
-TPR (104 bits, 2 experts)	1.47	273.12	310.32	172.12	191.16	2704.34	2390.46	0.0015
-Binary (6 bits, 2 experts)	0.06	12.17	12.6	7.06	7.26	138.18	204.08	0.0001
-Binary (8 bits, 2 experts)	0.27	51.88	57.76	31.84	34.94	385.63	451.76	0.0003
-Binary (10 bits, 2 experts)	0.33	63.38	70.61	38.9	42.7	469.09	534.86	0.0003
-Binary (16 bits, 2 experts)	0.51	95.48	106.78	60.1	65.96	735.68	784.4	0.0005
-Binary (6 bits, 3 experts)	0.28	53.8	59.9	33.05	36.25	391.0	594.82	0.0003
-Binary (8 bits, 3 experts)	0.36	67.43	75.47	42.44	46.53	512.09	585.32	0.0004
-Binary (8 bits, 512 locations, 3 experts)	1.33	250.71	311.01	159.59	190.44	1503.4	1182.52	0.0013
+name	FLOPs (1 x 10^9)	Output bytes for CPU (MB)	Output bytes for GPU (MB)	Requested bytes for CPU (MB)	Requested bytes for GPU (MB)	CPU time (ms)	GPU time (ms)	Theoretical power, Intel NCS2 (Watt)
+TPR (17 bits, 2 experts)	0.53	99.22	110.91	62.29	68.44	4133.32	833.82	0.0005
+TPR (48 bits, 2 experts)	1.47	273.12	308.46	171.46	189.61	12958.26	2413.16	0.0015
+TPR (104 bits, 2 experts)	1.47	273.12	310.32	171.47	191.16	24074.43	2390.46	0.0015
+Binary (6 bits, 2 experts)	0.06	12.17	12.6	6.98	7.26	401.65	204.08	0.0001
+Binary (8 bits, 2 experts)	0.27	51.88	57.76	31.71	34.94	4508.07	451.76	0.0003
+Binary (10 bits, 2 experts)	0.33	63.38	70.61	38.7	42.7	7062.67	534.86	0.0003
+Binary (16 bits, 2 experts)	0.51	95.48	106.78	59.93	65.96	10909.07	784.4	0.0005
+Binary (6 bits, 3 experts)	0.28	53.8	59.9	32.94	36.25	6056.62	594.82	0.0003
+Binary (8 bits, 3 experts)	0.36	67.43	75.47	42.37	46.53	6707.91	585.32	0.0004
+Binary (8 bits, 512 locations, 3 experts)	1.33	250.71	311.01	159.57	190.44	26204.77	1182.52	0.0013

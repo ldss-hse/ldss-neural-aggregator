@@ -39,7 +39,7 @@ Mem:       24682208      249860    19997060        4120     4435288    24025068
 Swap:             0           0           0
 ```
 
-## GPU report information
+## CPU (HP) report information
 
 CPU used:
 ```text
@@ -76,3 +76,24 @@ RAM used:
 Mem:       49451080      313344    44079820        4980     5057916    48533668
 Swap:             0           0           0
 ```
+
+## CPU report information
+
+CPU used:
+```text
+wmic cpu get caption, deviceid, name, numberofcores, maxclockspeed, status
+Caption                                 DeviceID  MaxClockSpeed  Name                                      NumberOfCores  Status
+Intel64 Family 6 Model 142 Stepping 10  CPU0      1896           Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz  4              OK
+```
+
+RAM used:
+```text
+systeminfo | findstr /C:"Total Physical Memory"
+Total Physical Memory:     32 602 MB
+
+wmic memorychip get devicelocator, capacity
+Capacity     DeviceLocator
+17179869184  ChannelA-DIMM0
+17179869184  ChannelB-DIMM0
+```
+
