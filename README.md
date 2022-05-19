@@ -20,6 +20,8 @@ numerous tasks, such as:
 5. MTA operator for linguistic decision-making.
 
 Also, you can find a number of pre-trained [models](./trained_models) for most of the aforementioned tasks.
+Most of these models were analyzed from the statistical standpoint: memory, FLOPs, theoretical power consumption.
+Report is present in [./trained_models/stats_reports/table.pdf](./trained_models/stats_reports/table.pdf).
 
 ### Acknowledgements
 
